@@ -23,7 +23,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -33,6 +34,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define UART_RECEIVE_BUFFER_SIZE_IN_BYTE 12
+#define RAWTODEG 0.0054931640625
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -48,6 +51,8 @@ SPI_HandleTypeDef hspi2;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
+uint8_t uartRxData[100];
+uint8_t uartTxData[100];
 
 /* USER CODE END PV */
 
@@ -58,6 +63,13 @@ static void MX_DAC_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
+void configSensor(void);
+void configSystem(void);
+uint8_t writeSensorRegister(uint8_t address, uint8_t value);
+uint8_t readSensorRegister(uint8_t address);
+uint16_t readSensorAngle(void);
+void transmitAngleToUart(uint16_t angle);
+void setDacValue(uint16_t angle);
 
 /* USER CODE END PFP */
 
@@ -73,6 +85,7 @@ static void MX_USART1_UART_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+  uint16_t angle;
 
   /* USER CODE END 1 */
 
@@ -98,6 +111,8 @@ int main(void)
   MX_SPI2_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  configSystem();
+  configSensor();
 
   /* USER CODE END 2 */
 
@@ -105,6 +120,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    angle=readSensorAngle();
+    setDacValue(angle);
+    transmitAngleToUart(angle);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -314,6 +332,96 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void configSensor(void)
+{
+  //writeSensorRegister(0, 0);
+  //writeSensorRegister(1, 0);
+}
+
+void configSystem(void)
+{
+  HAL_GPIO_WritePin(STATUS_OK_GPIO_Port, STATUS_OK_Pin, GPIO_PIN_SET);
+  //HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRxData, UART_RECEIVE_BUFFER_SIZE_IN_BYTE);
+  HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
+  HAL_DAC_Start(&hdac, DAC_CHANNEL_2);
+}
+
+uint8_t writeSensorRegister(uint8_t address, uint8_t value)
+{
+  uint32_t delayInMs=20;
+  uint32_t timeoutInMs=10;
+  uint8_t txData[2];
+  uint8_t rxData[2];
+  uint8_t registerValue;
+  
+  txData[0]=value;
+  txData[1]=(0x4<<5)|(0x1F&address);
+  HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_RESET);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeoutInMs);
+  HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
+  HAL_Delay(delayInMs);
+  
+  txData[0]=0;
+  txData[1]=0;
+  HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_RESET);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeoutInMs);
+  HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
+  registerValue=rxData[1];
+  return registerValue;
+}
+
+uint8_t readSensorRegister(uint8_t address)
+{
+  uint32_t delayInMs=1;
+  uint32_t timeoutInMs=10;
+  uint8_t txData[2];
+  uint8_t rxData[2];
+  uint8_t registerValue;
+  
+  txData[0]=0x00;
+  txData[1]=(0x2<<5)|(0x1F&address);
+  HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_RESET);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeoutInMs);
+  HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
+  HAL_Delay(delayInMs);
+  
+  txData[0]=0;
+  txData[1]=0;
+  HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_RESET);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeoutInMs);
+  HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
+  registerValue=rxData[1];
+  return registerValue;
+}
+
+uint16_t readSensorAngle(void)
+{
+  uint32_t timeoutInMs=10;
+  uint8_t txData[2];
+  uint8_t rxData[2];
+  uint16_t angleSensor;
+  
+  txData[0]=0;
+  txData[1]=0;
+  HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_RESET);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeoutInMs);
+  HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
+  angleSensor=(rxData[1]<<8)|rxData[0];
+  return angleSensor;
+}
+
+void transmitAngleToUart(uint16_t angle)
+{
+  sprintf((char *)uartTxData, "Angle Sensor = %d, %3.3f\n", angle, angle*RAWTODEG);
+  HAL_UART_Transmit(&huart1, uartTxData, strlen((const char *)uartTxData), 100);
+}
+
+void setDacValue(uint16_t angle)
+{
+  //DAC_OUTx = VREF+ * DOR / 4095  with VREF+ = VDD = 3.3V
+  //DAC_OUTx = 3.3 * angle truncated to 12-bits / 4095
+  HAL_DACEx_DualSetValue(&hdac, DAC_ALIGN_12B_L, angle, (65536-angle)&0xFFFF);
+}
 
 /* USER CODE END 4 */
 
