@@ -367,14 +367,14 @@ uint8_t writeSensorRegister(uint8_t address, uint8_t value)
   txData[0]=value;
   txData[1]=(0x4<<5)|(0x1F&address);
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_RESET);
-  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeoutInMs);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 1, timeoutInMs);
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
   HAL_Delay(delayInMs);
   
   txData[0]=0;
   txData[1]=0;
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_RESET);
-  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeoutInMs);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 1, timeoutInMs);
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
   registerValue=rxData[1];
   return registerValue;
@@ -391,14 +391,14 @@ uint8_t readSensorRegister(uint8_t address)
   txData[0]=0x00;
   txData[1]=(0x2<<5)|(0x1F&address);
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_RESET);
-  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeoutInMs);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 1, timeoutInMs);
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
   HAL_Delay(delayInMs);
   
   txData[0]=0;
   txData[1]=0;
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_RESET);
-  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeoutInMs);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 1, timeoutInMs);
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
   registerValue=rxData[1];
   return registerValue;
@@ -414,7 +414,7 @@ uint16_t readSensorAngle(void)
   txData[0]=0;
   txData[1]=0;
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_RESET);
-  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 2, timeoutInMs);
+  HAL_SPI_TransmitReceive(&hspi2, txData, rxData, 1, timeoutInMs);
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
   angleSensor=(rxData[1]<<8)|rxData[0];
   return angleSensor;
