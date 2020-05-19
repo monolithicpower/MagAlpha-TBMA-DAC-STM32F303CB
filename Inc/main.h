@@ -60,6 +60,7 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define DISABLE_MCU_SPI_Pin GPIO_PIN_11
 #define DISABLE_MCU_SPI_GPIO_Port GPIOB
+#define DISABLE_MCU_SPI_EXTI_IRQn EXTI15_10_IRQn
 #define SPI2_CS_Pin GPIO_PIN_12
 #define SPI2_CS_GPIO_Port GPIOB
 #define STATUS_OK_Pin GPIO_PIN_5
