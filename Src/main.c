@@ -72,6 +72,7 @@ uint8_t readSensorRegister(uint8_t address);
 uint16_t readSensorAngle(void);
 void transmitAngleToUart(uint16_t angle);
 void setDacValue(uint16_t angle);
+void checkSpiHostId(void);
 
 /* USER CODE END PFP */
 
@@ -88,6 +89,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   uint16_t angle;
+  uint32_t delayInMs=500;
 
   /* USER CODE END 1 */
 
@@ -127,6 +129,11 @@ int main(void)
       angle=readSensorAngle();
       setDacValue(angle);
       transmitAngleToUart(angle);
+    }
+    else
+    {
+      HAL_GPIO_TogglePin(STATUS_OK_GPIO_Port, STATUS_OK_Pin);
+      HAL_Delay(delayInMs);
     }
     
     /* USER CODE END WHILE */
@@ -344,8 +351,11 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void configSensor(void)
 {
-  //writeSensorRegister(0, 0);
-  //writeSensorRegister(1, 0);
+  if (spiEnabled)
+  {
+    //writeSensorRegister(0, 0);
+    //writeSensorRegister(1, 0);
+  }
 }
 
 void configSystem(void)
@@ -354,6 +364,7 @@ void configSystem(void)
   //HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRxData, UART_RECEIVE_BUFFER_SIZE_IN_BYTE);
   HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
   HAL_DAC_Start(&hdac, DAC_CHANNEL_2);
+  checkSpiHostId();
 }
 
 uint8_t writeSensorRegister(uint8_t address, uint8_t value)
@@ -433,6 +444,61 @@ void setDacValue(uint16_t angle)
   HAL_DACEx_DualSetValue(&hdac, DAC_ALIGN_12B_L, angle, (65536-angle)&0xFFFF);
 }
 
+void checkSpiHostId(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11)) //high
+  {
+    //disable MCU SPI
+    spiEnabled = false;
+    HAL_SPI_DeInit(&hspi2);
+    HAL_GPIO_DeInit(SPI2_CS_GPIO_Port, SPI2_CS_Pin);
+    
+    //CS
+    GPIO_InitStruct.Pin = SPI2_CS_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(SPI2_CS_GPIO_Port, &GPIO_InitStruct);
+    
+    //SCLK
+    GPIO_InitStruct.Pin = GPIO_PIN_13;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    
+    //MISO
+    GPIO_InitStruct.Pin = GPIO_PIN_14;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    
+    //MOSI
+    GPIO_InitStruct.Pin = GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    
+    HAL_GPIO_WritePin(STATUS_OK_GPIO_Port, STATUS_OK_Pin, GPIO_PIN_RESET);
+  }
+  else //low
+  {
+    //enable MCU SPI
+    spiEnabled = true;
+    GPIO_InitStruct.Pin = SPI2_CS_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(SPI2_CS_GPIO_Port, &GPIO_InitStruct);
+    MX_SPI2_Init();
+    
+    HAL_GPIO_WritePin(STATUS_OK_GPIO_Port, STATUS_OK_Pin, GPIO_PIN_SET);
+  }
+}
+
 /**
   * @brief  EXTI line detection callback.
   * @param  GPIO_Pin Specifies the port pin connected to corresponding EXTI line.
@@ -440,58 +506,10 @@ void setDacValue(uint16_t angle)
   */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  uint32_t delayInMs=20;
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
   if (GPIO_Pin == GPIO_PIN_11)
   {
     HAL_NVIC_DisableIRQ(EXTI15_10_IRQn);
-    HAL_Delay(delayInMs); //wait to avoid catching unstable signal
-    if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11)) //high
-    {
-      //disable MCU SPI
-      spiEnabled = false;
-      HAL_SPI_DeInit(&hspi2);
-      HAL_GPIO_DeInit(SPI2_CS_GPIO_Port, SPI2_CS_Pin);
-      
-      //CS
-      GPIO_InitStruct.Pin = SPI2_CS_Pin;
-      GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-      GPIO_InitStruct.Pull = GPIO_NOPULL;
-      GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-      HAL_GPIO_Init(SPI2_CS_GPIO_Port, &GPIO_InitStruct);
-      
-      //SCLK
-      GPIO_InitStruct.Pin = GPIO_PIN_13;
-      GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-      GPIO_InitStruct.Pull = GPIO_NOPULL;
-      GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-      HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-      
-      //MISO
-      GPIO_InitStruct.Pin = GPIO_PIN_14;
-      GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-      GPIO_InitStruct.Pull = GPIO_NOPULL;
-      GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-      HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-      
-      //MOSI
-      GPIO_InitStruct.Pin = GPIO_PIN_15;
-      GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-      GPIO_InitStruct.Pull = GPIO_NOPULL;
-      GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-      HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    }
-    else //low
-    {
-      //enable MCU SPI
-      spiEnabled = true;
-      GPIO_InitStruct.Pin = SPI2_CS_Pin;
-      GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-      GPIO_InitStruct.Pull = GPIO_PULLUP;
-      GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-      HAL_GPIO_Init(SPI2_CS_GPIO_Port, &GPIO_InitStruct);
-      MX_SPI2_Init();
-    }
+    checkSpiHostId();
     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
   }
 }
